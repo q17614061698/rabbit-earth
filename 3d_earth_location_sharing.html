@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D地球 - 实时位置共享</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
+            overflow: hidden;
+            color: white;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui-panel {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .control-panel {
+            top: 20px;
+            left: 20px;
+            width: 300px;
+        }
+
+        .user-panel {
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .status-panel {
+            bottom: 20px;
+            left: 20px;
+            width: 350px;
+        }
+
+        h2 {
+            color: #64ffda;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b3b3b3;
+            font-size: 14px;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #64ffda;
+        }
+
+        button {
+            background: linear-gradient(135deg, #64ffda, #00bcd4);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(100, 255, 218, 0.3);
+        }
+
+        button:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .user-item:hover {
+            background: rgba(100, 255, 218, 0.2);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #64ffda, #00bcd4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: bold;
+            color: #64ffda;
+        }
+
+        .user-location {
+            font-size: 12px;
+            color: #b3b3b3;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-label {
+            color: #b3b3b3;
+        }
+
+        .status-value {
+            color: #64ffda;
+            font-weight: bold;
+        }
+
+        .rabbit-selection {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .rabbit-option {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .rabbit-option:hover {
+            border-color: #64ffda;
+            background: rgba(100, 255, 218, 0.1);
+        }
+
+        .rabbit-option.selected {
+            border-color: #64ffda;
+            background: rgba(100, 255, 218, 0.2);
+            box-shadow: 0 0 15px rgba(100, 255, 218, 0.3);
+        }
+
+        .rabbit-avatar {
+            font-size: 24px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .black-rabbit {
+            filter: hue-rotate(0deg) saturate(0%) brightness(0.3) drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .white-rabbit {
+            filter: hue-rotate(0deg) saturate(0%) brightness(1.2) drop-shadow(0 2px 4px rgba(255,255,255,0.3));
+        }
+
+        .rabbit-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        .rabbit-icon {
+            font-size: 16px;
+        }
+
+        .user-type-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+
+        .black-badge {
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+        }
+
+        .coordinates {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(100, 255, 218, 0.3);
+            border-top: 4px solid #64ffda;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 滚动条样式 */
+        .user-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .user-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .user-panel::-webkit-scrollbar-thumb {
+            background: #64ffda;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div class="loading" id="loading">
+            <div>
+                <div class="spinner"></div>
+                <div style="margin-top: 10px; color: #64ffda;">加载3D地球中...</div>
+            </div>
+        </div>
+
+        <div class="ui-panel control-panel">
+            <h2>🌍 位置共享控制</h2>
+            <div class="input-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" placeholder="输入你的用户名" value="我">
+            </div>
+            <div class="input-group">
+                <label>选择你的兔子类型</label>
+                <div class="rabbit-selection">
+                    <div class="rabbit-option" data-type="black">
+                        <div class="rabbit-avatar black-rabbit">🐰</div>
+                        <span>黑兔</span>
+                    </div>
+                    <div class="rabbit-option selected" data-type="white">
+                        <div class="rabbit-avatar white-rabbit">🐰</div>
+                        <span>白兔</span>
+                    </div>
+                </div>
+            </div>
+            <button id="shareLocation">📍 开始共享位置</button>
+            <button id="stopSharing" disabled>⏹️ 停止共享</button>
+            <button id="addRandomUser">🐰 添加模拟兔子</button>
+            <button id="resetView">🎯 重置视角</button>
+        </div>
+
+        <div class="ui-panel user-panel">
+            <h2>🐰 在线兔子 (<span id="userCount">0</span>)</h2>
+            <div class="rabbit-stats">
+                <div class="stat-item">
+                    <span class="rabbit-icon black-rabbit">🐰</span>
+                    <span>黑兔: <span id="blackRabbitCount">0</span></span>
+                </div>
+                <div class="stat-item">
+                    <span class="rabbit-icon white-rabbit">🐰</span>
+                    <span>白兔: <span id="whiteRabbitCount">0</span></span>
+                </div>
+            </div>
+            <div id="userList"></div>
+        </div>
+
+        <div class="ui-panel status-panel">
+            <h2>📊 系统状态</h2>
+            <div class="status-item">
+                <span class="status-label">连接状态:</span>
+                <span class="status-value" id="connectionStatus">离线</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">我的位置:</span>
+                <span class="status-value" id="myLocation">未获取</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">共享状态:</span>
+                <span class="status-value" id="sharingStatus">未共享</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">最后更新:</span>
+                <span class="status-value" id="lastUpdate">--</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let scene, camera, renderer, earth, controls;
+        let users = new Map();
+        let isSharing = false;
+        let animationId;
+        let selectedRabbitType = 'white'; // 默认白兔
+        
+        // 城市数据（用于模拟用户）
+        const cities = [
+            { name: '北京', lat: 39.9042, lng: 116.4074 },
+            { name: '上海', lat: 31.2304, lng: 121.4737 },
+            { name: '广州', lat: 23.1291, lng: 113.2644 },
+            { name: '深圳', lat: 22.5431, lng: 114.0579 },
+            { name: '成都', lat: 30.5728, lng: 104.0668 },
+            { name: '杭州', lat: 30.2741, lng: 120.1551 },
+            { name: '西安', lat: 34.2658, lng: 108.9534 },
+            { name: '武汉', lat: 30.5928, lng: 114.3055 },
+            { name: '南京', lat: 32.0603, lng: 118.7969 },
+            { name: '重庆', lat: 29.5630, lng: 106.5516 },
+            { name: '东京', lat: 35.6762, lng: 139.6503 },
+            { name: '纽约', lat: 40.7128, lng: -74.0060 },
+            { name: '伦敦', lat: 51.5074, lng: -0.1278 },
+            { name: '巴黎', lat: 48.8566, lng: 2.3522 },
+            { name: '悉尼', lat: -33.8688, lng: 151.2093 }
+        ];
+
+        // 初始化场景
+        function initThreeJS() {
+            // 创建场景
+            scene = new THREE.Scene();
+            
+            // 创建相机
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 3);
+            
+            // 创建渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // 创建地球
+            createEarth();
+            
+            // 添加光源
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 3, 5);
+            scene.add(directionalLight);
+            
+            // 添加星空背景
+            createStarfield();
+            
+            // 创建简单的轨道控制（手动实现）
+            setupControls();
+            
+            // 开始渲染循环
+            animate();
+            
+            // 隐藏加载界面
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function createEarth() {
+            const geometry = new THREE.SphereGeometry(1, 64, 64);
+            
+            // 地球材质
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x2194ce,
+                shininess: 100,
+                transparent: true,
+                opacity: 0.9
+            });
+            
+            earth = new THREE.Mesh(geometry, material);
+            scene.add(earth);
+            
+            // 添加大气层效果
+            const atmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
+            const atmosphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4fc3f7,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.BackSide
+            });
+            const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+            scene.add(atmosphere);
+        }
+
+        function createStarfield() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 2
+            });
+            
+            const starVertices = [];
+            for (let i = 0; i < 1000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starVertices.push(x, y, z);
+            }
+            
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+
+        function setupControls() {
+            let mouseDown = false;
+            let mouseX = 0;
+            let mouseY = 0;
+            let targetRotationX = 0;
+            let targetRotationY = 0;
+            let currentRotationX = 0;
+            let currentRotationY = 0;
+
+            renderer.domElement.addEventListener('mousedown', (event) => {
+                mouseDown = true;
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            });
+
+            renderer.domElement.addEventListener('mousemove', (event) => {
+                if (mouseDown) {
+                    const deltaX = event.clientX - mouseX;
+                    const deltaY = event.clientY - mouseY;
+                    
+                    targetRotationY += deltaX * 0.01;
+                    targetRotationX += deltaY * 0.01;
+                    
+                    // 限制垂直旋转
+                    targetRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetRotationX));
+                    
+                    mouseX = event.clientX;
+                    mouseY = event.clientY;
+                }
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                mouseDown = false;
+            });
+
+            renderer.domElement.addEventListener('wheel', (event) => {
+                const zoomSpeed = 0.1;
+                camera.position.multiplyScalar(1 + event.deltaY * zoomSpeed * 0.01);
+                
+                // 限制缩放范围
+                const distance = camera.position.length();
+                if (distance < 1.5) camera.position.normalize().multiplyScalar(1.5);
+                if (distance > 10) camera.position.normalize().multiplyScalar(10);
+            });
+
+            // 在动画循环中更新旋转
+            function updateControls() {
+                currentRotationX += (targetRotationX - currentRotationX) * 0.05;
+                currentRotationY += (targetRotationY - currentRotationY) * 0.05;
+                
+                earth.rotation.x = currentRotationX;
+                earth.rotation.y = currentRotationY;
+            }
+
+            return updateControls;
+        }
+
+        const updateControls = setupControls();
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            updateControls();
+            
+            // 地球自转
+            earth.rotation.y += 0.001;
+            
+            renderer.render(scene, camera);
+        }
+
+        // 位置转换函数
+        function latLngToVector3(lat, lng, radius = 1) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lng + 180) * (Math.PI / 180);
+            
+            return new THREE.Vector3(
+                -radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.cos(phi),
+                radius * Math.sin(phi) * Math.sin(theta)
+            );
+        }
+
+        // 创建用户标记（兔子形状）
+        function createUserMarker(user) {
+            const group = new THREE.Group();
+            
+            // 创建兔子形状的标记
+            const rabbitGroup = createRabbitShape(user.rabbitType);
+            
+            // 脉冲效果
+            const pulseGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+            const pulseMaterial = new THREE.MeshBasicMaterial({ 
+                color: user.rabbitType === 'black' ? 0x333333 : 0xffffff,
+                transparent: true,
+                opacity: 0.2
+            });
+            const pulse = new THREE.Mesh(pulseGeometry, pulseMaterial);
+            
+            group.add(rabbitGroup);
+            group.add(pulse);
+            
+            // 位置
+            const position = latLngToVector3(user.lat, user.lng, 1.02);
+            group.position.copy(position);
+            
+            // 让兔子始终面向外部
+            group.lookAt(group.position.clone().multiplyScalar(2));
+            
+            // 动画属性
+            group.userData = {
+                pulse: pulse,
+                rabbit: rabbitGroup,
+                originalScale: 1,
+                time: 0
+            };
+            
+            return group;
+        }
+
+        // 创建3D兔子形状
+        function createRabbitShape(rabbitType) {
+            const rabbitGroup = new THREE.Group();
+            
+            // 兔子颜色
+            const rabbitColor = rabbitType === 'black' ? 0x2c2c2c : 0xf5f5f5;
+            const earColor = rabbitType === 'black' ? 0x1a1a1a : 0xffc0cb;
+            
+            // 身体（椭圆形）
+            const bodyGeometry = new THREE.SphereGeometry(0.025, 12, 8);
+            bodyGeometry.scale(1, 0.8, 1.2);
+            const bodyMaterial = new THREE.MeshLambertMaterial({ color: rabbitColor });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = -0.01;
+            rabbitGroup.add(body);
+            
+            // 头部
+            const headGeometry = new THREE.SphereGeometry(0.018, 12, 8);
+            const headMaterial = new THREE.MeshLambertMaterial({ color: rabbitColor });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 0.015;
+            rabbitGroup.add(head);
+            
+            // 耳朵
+            const earGeometry = new THREE.SphereGeometry(0.008, 8, 6);
+            earGeometry.scale(0.6, 2, 0.4);
+            const earMaterial = new THREE.MeshLambertMaterial({ color: earColor });
+            
+            const leftEar = new THREE.Mesh(earGeometry, earMaterial);
+            leftEar.position.set(-0.008, 0.025, 0.005);
+            leftEar.rotation.z = 0.3;
+            rabbitGroup.add(leftEar);
+            
+            const rightEar = new THREE.Mesh(earGeometry, earMaterial);
+            rightEar.position.set(0.008, 0.025, 0.005);
+            rightEar.rotation.z = -0.3;
+            rabbitGroup.add(rightEar);
+            
+            // 尾巴
+            const tailGeometry = new THREE.SphereGeometry(0.006, 8, 6);
+            const tailMaterial = new THREE.MeshLambertMaterial({ color: rabbitColor });
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(0, -0.015, -0.02);
+            rabbitGroup.add(tail);
+            
+            // 眼睛
+            const eyeGeometry = new THREE.SphereGeometry(0.002, 6, 4);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.006, 0.018, 0.015);
+            rabbitGroup.add(leftEye);
+            
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.006, 0.018, 0.015);
+            rabbitGroup.add(rightEye);
+            
+            // 鼻子
+            const noseGeometry = new THREE.SphereGeometry(0.001, 6, 4);
+            const noseMaterial = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
+            const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+            nose.position.set(0, 0.015, 0.018);
+            rabbitGroup.add(nose);
+            
+            return rabbitGroup;
+        }
+
+        // 添加用户
+        function addUser(userData) {
+            if (users.has(userData.id)) {
+                updateUserPosition(userData);
+                return;
+            }
+            
+            const marker = createUserMarker(userData);
+            scene.add(marker);
+            users.set(userData.id, { data: userData, marker: marker });
+            
+            updateUserList();
+            updateStatus();
+        }
+
+        // 更新用户位置
+        function updateUserPosition(userData) {
+            const user = users.get(userData.id);
+            if (user) {
+                user.data = userData;
+                const position = latLngToVector3(userData.lat, userData.lng);
+                user.marker.position.copy(position);
+            }
+        }
+
+        // 移除用户
+        function removeUser(userId) {
+            const user = users.get(userId);
+            if (user) {
+                scene.remove(user.marker);
+                users.delete(userId);
+                updateUserList();
+                updateStatus();
+            }
+        }
+
+        // 更新用户列表UI
+        function updateUserList() {
+            const userList = document.getElementById('userList');
+            const userCount = document.getElementById('userCount');
+            const blackRabbitCount = document.getElementById('blackRabbitCount');
+            const whiteRabbitCount = document.getElementById('whiteRabbitCount');
+            
+            userList.innerHTML = '';
+            userCount.textContent = users.size;
+            
+            let blackCount = 0;
+            let whiteCount = 0;
+            
+            users.forEach((user, id) => {
+                // 统计兔子类型
+                if (user.data.rabbitType === 'black') {
+                    blackCount++;
+                } else {
+                    whiteCount++;
+                }
+                
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                
+                const avatar = document.createElement('div');
+                avatar.className = `user-avatar ${user.data.rabbitType}-rabbit`;
+                avatar.textContent = '🐰';
+                
+                const info = document.createElement('div');
+                info.className = 'user-info';
+                
+                const name = document.createElement('div');
+                name.className = 'user-name';
+                name.innerHTML = `${user.data.name}${user.data.isMe ? ' (我)' : ''} <span class="user-type-badge ${user.data.rabbitType}-badge">${user.data.rabbitType === 'black' ? '黑兔' : '白兔'}</span>`;
+                
+                const location = document.createElement('div');
+                location.className = 'user-location';
+                location.innerHTML = `${user.data.city || '未知城市'}<br><span class="coordinates">${user.data.lat.toFixed(4)}, ${user.data.lng.toFixed(4)}</span>`;
+                
+                info.appendChild(name);
+                info.appendChild(location);
+                
+                userItem.appendChild(avatar);
+                userItem.appendChild(info);
+                
+                // 点击用户项时聚焦到该用户
+                userItem.addEventListener('click', () => {
+                    focusOnUser(user.data);
+                });
+                
+                userList.appendChild(userItem);
+            });
+            
+            blackRabbitCount.textContent = blackCount;
+            whiteRabbitCount.textContent = whiteCount;
+        }
+
+        // 聚焦到用户
+        function focusOnUser(userData) {
+            const position = latLngToVector3(userData.lat, userData.lng, 3);
+            
+            // 平滑移动相机
+            const startPos = camera.position.clone();
+            const startTime = Date.now();
+            const duration = 1000;
+            
+            function updateCamera() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+                
+                camera.position.lerpVectors(startPos, position, eased);
+                camera.lookAt(0, 0, 0);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(updateCamera);
+                }
+            }
+            
+            updateCamera();
+        }
+
+        // 更新状态显示
+        function updateStatus() {
+            document.getElementById('connectionStatus').textContent = '在线';
+            document.getElementById('userCount').textContent = users.size;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        // 获取当前位置
+        function getCurrentPosition() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('浏览器不支持地理位置API'));
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    position => resolve(position),
+                    error => reject(error),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                );
+            });
+        }
+
+        // 开始位置共享
+        async function startSharing() {
+            const username = document.getElementById('username').value.trim();
+            if (!username) {
+                alert('请输入用户名');
+                return;
+            }
+            
+            try {
+                const position = await getCurrentPosition();
+                const userData = {
+                    id: 'me',
+                    name: username,
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    city: '我的位置',
+                    rabbitType: selectedRabbitType,
+                    isMe: true,
+                    timestamp: Date.now()
+                };
+                
+                addUser(userData);
+                isSharing = true;
+                
+                document.getElementById('shareLocation').disabled = true;
+                document.getElementById('stopSharing').disabled = false;
+                document.getElementById('sharingStatus').textContent = `正在共享 (${selectedRabbitType === 'black' ? '黑兔' : '白兔'})`;
+                document.getElementById('myLocation').textContent = `${userData.lat.toFixed(4)}, ${userData.lng.toFixed(4)}`;
+                
+                // 模拟实时更新
+                startLocationUpdates();
+                
+            } catch (error) {
+                console.error('获取位置失败:', error);
+                alert('获取位置失败，请确保允许位置访问权限');
+            }
+        }
+
+        // 停止位置共享
+        function stopSharing() {
+            isSharing = false;
+            removeUser('me');
+            
+            document.getElementById('shareLocation').disabled = false;
+            document.getElementById('stopSharing').disabled = true;
+            document.getElementById('sharingStatus').textContent = '未共享';
+            document.getElementById('myLocation').textContent = '未获取';
+        }
+
+        // 模拟位置更新
+        function startLocationUpdates() {
+            setInterval(() => {
+                if (!isSharing) return;
+                
+                // 模拟轻微的位置变化（实际应用中这里会获取真实位置）
+                const user = users.get('me');
+                if (user) {
+                    const userData = {
+                        ...user.data,
+                        lat: user.data.lat + (Math.random() - 0.5) * 0.001,
+                        lng: user.data.lng + (Math.random() - 0.5) * 0.001,
+                        timestamp: Date.now()
+                    };
+                    updateUserPosition(userData);
+                    updateStatus();
+                }
+            }, 5000);
+        }
+
+        // 添加模拟用户
+        function addRandomUser() {
+            const city = cities[Math.floor(Math.random() * cities.length)];
+            const randomId = 'user_' + Math.random().toString(36).substr(2, 9);
+            const names = ['小明', '小红', '小李', '小王', '小张', '小刘', '小陈', '小林', 'Alex', 'Emma', 'John', 'Sarah'];
+            const rabbitTypes = ['black', 'white'];
+            
+            const userData = {
+                id: randomId,
+                name: names[Math.floor(Math.random() * names.length)],
+                lat: city.lat + (Math.random() - 0.5) * 0.1,
+                lng: city.lng + (Math.random() - 0.5) * 0.1,
+                city: city.name,
+                rabbitType: rabbitTypes[Math.floor(Math.random() * rabbitTypes.length)],
+                isMe: false,
+                timestamp: Date.now()
+            };
+            
+            addUser(userData);
+        }
+
+        // 重置视角
+        function resetView() {
+            camera.position.set(0, 0, 3);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 事件监听器
+        document.getElementById('shareLocation').addEventListener('click', startSharing);
+        document.getElementById('stopSharing').addEventListener('click', stopSharing);
+        document.getElementById('addRandomUser').addEventListener('click', addRandomUser);
+        document.getElementById('resetView').addEventListener('click', resetView);
+
+        // 兔子类型选择事件
+        document.querySelectorAll('.rabbit-option').forEach(option => {
+            option.addEventListener('click', function() {
+                // 移除所有选中状态
+                document.querySelectorAll('.rabbit-option').forEach(opt => opt.classList.remove('selected'));
+                // 添加当前选中状态
+                this.classList.add('selected');
+                // 更新选中的兔子类型
+                selectedRabbitType = this.dataset.type;
+            });
+        });
+
+        // 在动画循环中添加脉冲效果
+        const originalAnimate = animate;
+        animate = function() {
+            originalAnimate();
+            
+            // 更新用户标记动画
+            users.forEach(user => {
+                if (user.marker.userData.pulse) {
+                    user.marker.userData.time += 0.02;
+                    const scale = 1 + Math.sin(user.marker.userData.time) * 0.3;
+                    user.marker.userData.pulse.scale.setScalar(scale);
+                    user.marker.userData.pulse.material.opacity = 0.15 + Math.sin(user.marker.userData.time) * 0.1;
+                    
+                    // 兔子轻微跳跃动画
+                    if (user.marker.userData.rabbit) {
+                        const jumpHeight = Math.sin(user.marker.userData.time * 2) * 0.003;
+                        user.marker.userData.rabbit.position.y = jumpHeight;
+                    }
+                }
+            });
+        };
+
+        // 初始化
+        initThreeJS();
+        
+        // 添加一些初始的模拟用户
+        setTimeout(() => {
+            addRandomUser();
+            addRandomUser();
+            addRandomUser();
+        }, 2000);
+    </script>
+</body>
+</html>
